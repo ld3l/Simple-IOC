@@ -1,7 +1,6 @@
 package com.simle.ioc.services;
 
-import com.simle.ioc.annotation.Autowired;
-import com.simle.ioc.annotation.Service;
+import com.simle.ioc.annotation.*;
 import com.simle.ioc.config.configurations.CustomAnnotationConfig;
 import com.simle.ioc.model.ServiceDetails;
 
@@ -17,13 +16,14 @@ public class ServiceScanningServices implements ScanningServices {
 
     public ServiceScanningServices(CustomAnnotationConfig config) {
         this.config = config;
+        init();
     }
 
     @Override
     public Set<ServiceDetails<?>> mapServices(Set<Class<?>> locatedClasses) {
         Set<ServiceDetails<?>> serviceDetailsStorage = new HashSet<>();
         Set<Class<? extends Annotation>> annotationsService = config.getAnnotationsService();
-        annotationsService.add(Annotation.class);
+
 
         for (Class<?> cls : locatedClasses) {
 
@@ -32,12 +32,15 @@ public class ServiceScanningServices implements ScanningServices {
             }
 
             for (Annotation annotation : cls.getAnnotations()) {
-                if(annotationsService.contains(annotation)){
+                if(annotationsService.contains(annotation.annotationType())){
                     ServiceDetails<?> serviceDetails = new ServiceDetails<>(cls,
                             annotation,
                             findConstructor(cls),
-
-                            )
+                            findVoidMethodWithZeroParamsAndAnnotations(PostConstruct.class,cls),
+                            findVoidMethodWithZeroParamsAndAnnotations(PreDestroy.class,cls),
+                            findBeans(cls)
+                            );
+                    serviceDetailsStorage.add(serviceDetails);
                 }
             }
 
@@ -59,14 +62,14 @@ public class ServiceScanningServices implements ScanningServices {
     private Method findVoidMethodWithZeroParamsAndAnnotations(Class<? extends Annotation> annotation, Class<?> cls) {
         for (Method method : cls.getDeclaredMethods()) {
             if (method.getParameterCount() != 0 ||
-                    (method.getReturnType() != void.class && method.getReturnType() != Void.class)) {
+                    (method.getReturnType() != void.class && method.getReturnType() != Void.class) ||
+            !method.isAnnotationPresent(annotation)) {
                 continue;
             }
 
-            if (AliasFinder.isAnnotationPresent(method.getDeclaredAnnotations(), annotation)) {
                 method.setAccessible(true);
                 return method;
-            }
+
         }
 
         if (cls.getSuperclass() != null) {
@@ -74,5 +77,26 @@ public class ServiceScanningServices implements ScanningServices {
         }
 
         return null;
+    }
+
+    private Method[] findBeans(Class<?> cls){
+        Set<Class<? extends Annotation>> beanAnnotations = config.getAnnotationsBeanService();
+        Set<Method> beanMethods = new HashSet<>();
+        for (Method method : cls.getDeclaredMethods()) {
+            if(method.getReturnType()==void.class||method.getParameterCount()!=0){
+                continue;
+            }
+            for (Class<? extends Annotation> beanAnnotation : beanAnnotations) {
+                if(method.isAnnotationPresent(beanAnnotation)){
+                    beanMethods.add(method);
+                }
+            }
+        }
+        return beanMethods.toArray(Method[]::new);
+    }
+
+    private void init(){
+        config.getAnnotationsBeanService().add(Bean.class);
+        config.getAnnotationsService().add(Service.class);
     }
 }
