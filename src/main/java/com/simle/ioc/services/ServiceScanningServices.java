@@ -3,12 +3,15 @@ package com.simle.ioc.services;
 import com.simle.ioc.annotation.*;
 import com.simle.ioc.config.configurations.CustomAnnotationConfig;
 import com.simle.ioc.model.ServiceDetails;
+import com.simle.ioc.utils.ServiceDetailsConstructorComparator;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 public class ServiceScanningServices implements ScanningServices {
 
@@ -41,11 +44,14 @@ public class ServiceScanningServices implements ScanningServices {
                             findBeans(cls)
                             );
                     serviceDetailsStorage.add(serviceDetails);
+                    break;
                 }
             }
 
         }
-        return serviceDetailsStorage;
+        return serviceDetailsStorage.stream()
+                .sorted(new ServiceDetailsConstructorComparator())
+                .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     private Constructor<?> findConstructor(Class<?> cls) {
@@ -88,7 +94,9 @@ public class ServiceScanningServices implements ScanningServices {
             }
             for (Class<? extends Annotation> beanAnnotation : beanAnnotations) {
                 if(method.isAnnotationPresent(beanAnnotation)){
+                    method.setAccessible(true);
                     beanMethods.add(method);
+//                    break;
                 }
             }
         }
